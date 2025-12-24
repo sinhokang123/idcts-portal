@@ -11,7 +11,8 @@ export default function IDCTSPortal() {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const fileInputRef = useRef(null);
   
-  const API_BASE = 'https://idcts-core.onrender.com';
+  // 🔥 새 API URL로 업데이트!
+  const API_BASE = 'https://idcts-core-gmzv.onrender.com';
 
   const progressSteps = [
     { pct: 10, text: 'URL 구조 분석 중...' },
@@ -94,10 +95,10 @@ export default function IDCTSPortal() {
   };
 
   const getRiskLabel = (score) => {
-    if (score >= 80) return '매우 높음';
-    if (score >= 60) return '높음';
-    if (score >= 40) return '보통';
-    return '낮음';
+    if (score >= 80) return 'CRITICAL';
+    if (score >= 60) return 'HIGH';
+    if (score >= 40) return 'MEDIUM';
+    return 'LOW';
   };
 
   const resetAnalysis = () => {
@@ -297,19 +298,28 @@ export default function IDCTSPortal() {
                 <p className="text-white/50 text-sm mt-1 break-all max-w-xl">{result.target_url}</p>
               </div>
               
-              {/* Risk Score Badge */}
-              {result.risk_score !== undefined && (
-                <div className={`${getRiskColor(result.risk_score).bg} ${getRiskColor(result.risk_score).border} border rounded-2xl p-4 text-center min-w-[140px]`}>
-                  <div className={`text-4xl font-black ${getRiskColor(result.risk_score).text}`}>
-                    {result.risk_score}
-                  </div>
-                  <div className="text-xs text-white/50 mt-1">위험도 점수</div>
-                  <div className={`text-sm font-bold ${getRiskColor(result.risk_score).text} mt-1`}>
-                    {getRiskLabel(result.risk_score)}
-                  </div>
+              {/* 🔥 Risk Score Badge - 항상 표시! */}
+              <div className={`${getRiskColor(result.risk_score || 0).bg} ${getRiskColor(result.risk_score || 0).border} border rounded-2xl p-4 text-center min-w-[140px]`}>
+                <div className={`text-4xl font-black ${getRiskColor(result.risk_score || 0).text}`}>
+                  {result.risk_score || 0}
                 </div>
-              )}
+                <div className="text-xs text-white/50 mt-1">Risk Score</div>
+                <div className={`text-sm font-bold ${getRiskColor(result.risk_score || 0).text} mt-1`}>
+                  {result.risk_level || getRiskLabel(result.risk_score || 0)}
+                </div>
+              </div>
             </div>
+
+            {/* 🔥 Risk Recommendation - NEW! */}
+            {result.risk_recommendation && (
+              <div className={`${getRiskColor(result.risk_score || 0).bg} ${getRiskColor(result.risk_score || 0).border} border rounded-xl p-4 mb-8`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">⚠️</span>
+                  <span className={`font-bold ${getRiskColor(result.risk_score || 0).text}`}>권고 조치</span>
+                </div>
+                <p className="text-white/80 text-sm">{result.risk_recommendation}</p>
+              </div>
+            )}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-4 gap-4 mb-8">
@@ -332,6 +342,30 @@ export default function IDCTSPortal() {
                 <div className="text-xs text-white/50 mt-1">WHOIS 정보</div>
               </div>
             </div>
+
+            {/* 🔥 Content Classification - NEW! */}
+            {result.content_classification && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
+                <h3 className="text-sm font-bold text-white/80 mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-400" />
+                  콘텐츠 분류
+                </h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <div className="text-xs text-white/40 uppercase mb-1">유형</div>
+                    <div className="text-sm text-white/80 font-bold">{result.content_classification.category_name || 'Unknown'}</div>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <div className="text-xs text-white/40 uppercase mb-1">신뢰도</div>
+                    <div className="text-sm text-white/80">{result.content_classification.confidence || 'N/A'}</div>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3">
+                    <div className="text-xs text-white/40 uppercase mb-1">미디어 타입</div>
+                    <div className="text-sm text-white/80">{result.content_classification.media_type || 'Unknown'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-2 gap-6 mb-8">
@@ -393,6 +427,38 @@ export default function IDCTSPortal() {
                       <div className="text-xs text-white/40 uppercase mb-1">{key}</div>
                       <div className="text-sm text-white/80 break-all">
                         {typeof value === 'object' ? JSON.stringify(value) : String(value || 'N/A')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 🔥 Takedown Priority - NEW! */}
+            {result.takedown_priority && result.takedown_priority.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
+                <h3 className="text-sm font-bold text-white/80 mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-orange-400" />
+                  신고 대상 우선순위
+                </h3>
+                <div className="space-y-3">
+                  {result.takedown_priority.map((item, i) => (
+                    <div key={i} className="bg-black/30 rounded-xl p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl font-black text-white/30">{item.rank || i + 1}</span>
+                        <div>
+                          <div className="font-bold text-white/90">{item.target}</div>
+                          <div className="text-xs text-white/50">{item.type}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-xs px-2 py-1 rounded ${
+                          item.difficulty === 'LOW' ? 'bg-green-500/20 text-green-400' :
+                          item.difficulty === 'MEDIUM' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                          난이도: {item.difficulty}
+                        </div>
                       </div>
                     </div>
                   ))}
