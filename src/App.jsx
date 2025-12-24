@@ -9,9 +9,9 @@ export default function IDCTSPortal() {
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [harAnalysis, setHarAnalysis] = useState(null);
   const fileInputRef = useRef(null);
   
-  // 🔥 새 API URL로 업데이트!
   const API_BASE = 'https://idcts-core-gmzv.onrender.com';
 
   const progressSteps = [
@@ -24,17 +24,54 @@ export default function IDCTSPortal() {
     { pct: 95, text: '증거 패키지 압축 중...' },
   ];
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     const validFiles = files.filter(f => 
       f.name.endsWith('.har') || 
       f.type.startsWith('image/')
     );
     setUploadedFiles(prev => [...prev, ...validFiles]);
+    
+    // 🔥 HAR 파일이면 자동으로 분석!
+    for (const file of validFiles) {
+      if (file.name.endsWith('.har')) {
+        await analyzeHarFile(file);
+      }
+    }
+  };
+
+  // 🔥 HAR 파일 분석 함수
+  const analyzeHarFile = async (file) => {
+    setProgressText('HAR 파일 분석 중...');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(`${API_BASE}/analyze-har`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('HAR 분석 실패');
+      }
+      
+      const data = await response.json();
+      setHarAnalysis(data);
+      
+    } catch (err) {
+      console.error('HAR 분석 에러:', err);
+      // 에러나도 계속 진행 가능하게
+    }
   };
 
   const removeFile = (index) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    // HAR 파일 삭제하면 분석 결과도 삭제
+    if (uploadedFiles[index]?.name.endsWith('.har')) {
+      setHarAnalysis(null);
+    }
   };
 
   const analyzeUrl = async () => {
@@ -48,7 +85,6 @@ export default function IDCTSPortal() {
     setResult(null);
     setProgress(0);
 
-    // Progress animation
     let stepIndex = 0;
     const progressInterval = setInterval(() => {
       if (stepIndex < progressSteps.length) {
@@ -72,6 +108,12 @@ export default function IDCTSPortal() {
       }
 
       const data = await response.json();
+      
+      // 🔥 HAR 분석 결과가 있으면 합치기
+      if (harAnalysis) {
+        data.har_analysis = harAnalysis;
+      }
+      
       setProgress(100);
       setProgressText('분석 완료!');
       
@@ -107,6 +149,7 @@ export default function IDCTSPortal() {
     setProgress(0);
     setProgressText('');
     setUploadedFiles([]);
+    setHarAnalysis(null);
   };
 
   return (
@@ -117,7 +160,6 @@ export default function IDCTSPortal() {
         <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-emerald-500/3 rounded-full blur-[150px]" />
         
-        {/* Grid Pattern */}
         <div 
           className="absolute inset-0 opacity-[0.03]"
           style={{
@@ -155,7 +197,6 @@ export default function IDCTSPortal() {
       <main className="relative z-10 max-w-6xl mx-auto px-6 py-12">
         
         {!result ? (
-          // Input Section
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-4xl font-black mb-4 bg-gradient-to-r from-white via-white to-white/60 bg-clip-text text-transparent">
@@ -196,7 +237,7 @@ export default function IDCTSPortal() {
             <div className="relative mb-6">
               <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
                 <label className="block text-sm font-medium text-white/60 mb-3">
-                  증거 파일 첨부 (선택사항)
+                  🔥 HAR 파일 업로드 (네트워크 증거 분석)
                 </label>
                 <div 
                   onClick={() => fileInputRef.current?.click()}
@@ -205,8 +246,8 @@ export default function IDCTSPortal() {
                   <svg className="w-10 h-10 mx-auto mb-3 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  <p className="text-white/50 text-sm mb-1">HAR 파일 또는 스크린샷을 드래그하거나 클릭하여 업로드</p>
-                  <p className="text-white/30 text-xs">.har, .png, .jpg, .jpeg 지원</p>
+                  <p className="text-white/50 text-sm mb-1">HAR 파일을 업로드하면 스트리밍 증거를 자동 분석합니다</p>
+                  <p className="text-white/30 text-xs">.har 파일 (브라우저 개발자도구 → 네트워크 → HAR로 저장)</p>
                 </div>
                 <input
                   ref={fileInputRef}
@@ -228,6 +269,11 @@ export default function IDCTSPortal() {
                           </span>
                           <span className="text-sm text-white/70">{file.name}</span>
                           <span className="text-xs text-white/30">({(file.size / 1024).toFixed(1)} KB)</span>
+                          {file.name.endsWith('.har') && harAnalysis && (
+                            <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded">
+                              ✓ 분석 완료
+                            </span>
+                          )}
                         </div>
                         <button 
                           onClick={() => removeFile(idx)}
@@ -237,6 +283,39 @@ export default function IDCTSPortal() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* 🔥 HAR 분석 미리보기 */}
+                {harAnalysis && (
+                  <div className="mt-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-lg">🔍</span>
+                      <span className="font-bold text-purple-400">HAR 네트워크 분석 결과</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div className="bg-black/30 rounded-lg p-3">
+                        <div className="text-xs text-white/40">총 요청</div>
+                        <div className="text-xl font-bold text-white">{harAnalysis.total_requests || 0}</div>
+                      </div>
+                      <div className="bg-black/30 rounded-lg p-3">
+                        <div className="text-xs text-white/40">도메인</div>
+                        <div className="text-xl font-bold text-cyan-400">{harAnalysis.unique_domains?.length || 0}</div>
+                      </div>
+                      <div className="bg-black/30 rounded-lg p-3">
+                        <div className="text-xs text-white/40">스트리밍 제공자</div>
+                        <div className={`text-xl font-bold ${harAnalysis.is_streaming_provider ? 'text-red-400' : 'text-green-400'}`}>
+                          {harAnalysis.is_streaming_provider ? 'YES' : 'NO'}
+                        </div>
+                      </div>
+                    </div>
+                    {harAnalysis.is_streaming_provider && (
+                      <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                        <div className="text-xs text-red-400 font-bold mb-1">⚠️ 스트리밍 제공 증거 발견</div>
+                        <div className="text-xs text-white/60">{harAnalysis.summary}</div>
+                        <div className="text-xs text-white/40 mt-1">신뢰도: {harAnalysis.confidence}</div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -272,11 +351,12 @@ export default function IDCTSPortal() {
 
             {/* Features Grid */}
             {!isAnalyzing && (
-              <div className="grid grid-cols-3 gap-4 mt-12">
+              <div className="grid grid-cols-4 gap-4 mt-12">
                 {[
-                  { icon: '🔍', title: 'URL 분석', desc: 'iframe, video 등 미디어 추출' },
-                  { icon: '🌐', title: 'CDN 식별', desc: 'Cloudflare, Akamai 등 자동 분류' },
-                  { icon: '📋', title: '문서 생성', desc: 'DMCA, 진술서 자동 작성' },
+                  { icon: '🔍', title: 'URL 분석', desc: 'iframe, video 추출' },
+                  { icon: '🌐', title: 'CDN 식별', desc: 'Cloudflare, Akamai 등' },
+                  { icon: '📄', title: 'HAR 분석', desc: '네트워크 증거 추출' },
+                  { icon: '📋', title: '문서 생성', desc: 'DMCA, 진술서 자동' },
                 ].map((feature, i) => (
                   <div key={i} className="bg-white/5 border border-white/5 rounded-xl p-4 text-center hover:border-white/10 transition-colors">
                     <div className="text-2xl mb-2">{feature.icon}</div>
@@ -298,7 +378,6 @@ export default function IDCTSPortal() {
                 <p className="text-white/50 text-sm mt-1 break-all max-w-xl">{result.target_url}</p>
               </div>
               
-              {/* 🔥 Risk Score Badge - 항상 표시! */}
               <div className={`${getRiskColor(result.risk_score || 0).bg} ${getRiskColor(result.risk_score || 0).border} border rounded-2xl p-4 text-center min-w-[140px]`}>
                 <div className={`text-4xl font-black ${getRiskColor(result.risk_score || 0).text}`}>
                   {result.risk_score || 0}
@@ -310,7 +389,7 @@ export default function IDCTSPortal() {
               </div>
             </div>
 
-            {/* 🔥 Risk Recommendation - NEW! */}
+            {/* Risk Recommendation */}
             {result.risk_recommendation && (
               <div className={`${getRiskColor(result.risk_score || 0).bg} ${getRiskColor(result.risk_score || 0).border} border rounded-xl p-4 mb-8`}>
                 <div className="flex items-center gap-2 mb-2">
@@ -343,7 +422,67 @@ export default function IDCTSPortal() {
               </div>
             </div>
 
-            {/* 🔥 Content Classification - NEW! */}
+            {/* 🔥 HAR Analysis Result - 결과에 표시! */}
+            {(result.har_analysis || harAnalysis) && (
+              <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-6 mb-8">
+                <h3 className="text-sm font-bold text-white/80 mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-400" />
+                  🔥 HAR 네트워크 분석 (스트리밍 증거)
+                </h3>
+                
+                {(() => {
+                  const har = result.har_analysis || harAnalysis;
+                  return (
+                    <>
+                      <div className="grid grid-cols-4 gap-4 mb-4">
+                        <div className="bg-black/30 rounded-lg p-3">
+                          <div className="text-xs text-white/40">총 요청</div>
+                          <div className="text-2xl font-bold text-white">{har.total_requests || 0}</div>
+                        </div>
+                        <div className="bg-black/30 rounded-lg p-3">
+                          <div className="text-xs text-white/40">발견 도메인</div>
+                          <div className="text-2xl font-bold text-cyan-400">{har.unique_domains?.length || 0}</div>
+                        </div>
+                        <div className="bg-black/30 rounded-lg p-3">
+                          <div className="text-xs text-white/40">스트리밍 세그먼트</div>
+                          <div className="text-2xl font-bold text-purple-400">{har.streaming_evidence?.total_segments || 0}</div>
+                        </div>
+                        <div className="bg-black/30 rounded-lg p-3">
+                          <div className="text-xs text-white/40">직접 제공자 여부</div>
+                          <div className={`text-2xl font-bold ${har.is_streaming_provider ? 'text-red-400' : 'text-green-400'}`}>
+                            {har.is_streaming_provider ? '⚠️ YES' : '✓ NO'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {har.is_streaming_provider && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                          <div className="text-sm font-bold text-red-400 mb-2">
+                            ⚠️ 본 사이트는 CDN을 통해 직접 스트리밍을 제공하는 것으로 확인됨
+                          </div>
+                          <div className="text-xs text-white/60 mb-2">{har.summary}</div>
+                          <div className="flex gap-4 text-xs">
+                            <span className="text-white/40">신뢰도: <span className={har.confidence === 'HIGH' ? 'text-red-400' : 'text-yellow-400'}>{har.confidence}</span></span>
+                            {har.streaming_evidence?.cdn_domain && (
+                              <span className="text-white/40">CDN: <span className="text-cyan-400">{har.streaming_evidence.cdn_domain}</span></span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {har.legal_evidence && (
+                        <div className="mt-4 bg-black/30 rounded-xl p-4">
+                          <div className="text-xs text-white/40 mb-2">법적 증거 요약</div>
+                          <pre className="text-xs text-white/70 whitespace-pre-wrap font-mono">{har.legal_evidence}</pre>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Content Classification */}
             {result.content_classification && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
                 <h3 className="text-sm font-bold text-white/80 mb-4 flex items-center gap-2">
@@ -434,7 +573,7 @@ export default function IDCTSPortal() {
               </div>
             )}
 
-            {/* 🔥 Takedown Priority - NEW! */}
+            {/* Takedown Priority */}
             {result.takedown_priority && result.takedown_priority.length > 0 && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
                 <h3 className="text-sm font-bold text-white/80 mb-4 flex items-center gap-2">
